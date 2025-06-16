@@ -9,7 +9,7 @@
 
 namespace
 {
-const std::uint32_t PROGRAM_SIZE_TRYTES = std::pow(3, 13); // About 1.6m trytes
+const std::uint32_t PROGRAM_SIZE_TRYTES = std::pow(3, 13) + 1; // About 1.6m trytes, add +1 so it becomes 4 tryte aligned and works with RV32I pointer arithmetic
 }
 
 namespace Assemblers
@@ -138,7 +138,7 @@ void ExecutableProgram::calculateMemorySize()
 
    m_memory.resize(memorySize, 0);
 
-   std::cout << "Program size: " << getProgramSizeTrytes() << " trytes; Instruction size: " << getInstructionsSizeTrytes() << " trytes; Memory size: " << m_memory.size() << " trytes" << std::endl;
+   // std::cout << "Program size: " << getProgramSizeTrytes() << " trytes; Instruction size: " << getInstructionsSizeTrytes() << " trytes; Memory size: " << m_memory.size() << " trytes" << std::endl;
 }
 
 std::uint32_t ExecutableProgram::getProgramSizeTrytes() const
@@ -148,7 +148,12 @@ std::uint32_t ExecutableProgram::getProgramSizeTrytes() const
 
 std::uint32_t ExecutableProgram::getInstructionsSizeTrytes() const
 {
-   return std::ceil((m_instructionsSize * (float)REBEL6_TRITS_PER_INSTRUCTION) / REBEL6_TRITS_PER_TRYTE);
+   std::uint32_t retVal = std::ceil((m_instructionsSize * (float)REBEL6_TRITS_PER_INSTRUCTION) / REBEL6_TRITS_PER_TRYTE);
+   // std::cout << "Instruction size trytes first = " << retVal <<std::endl;
+   retVal = retVal + 4 - (retVal % 4); // Make it 4 tryte aligned so it'll work better with RV32I pointer arithmetic
+   // std::cout << "Instruction size trytes  = " << retVal << " is multiple of 4 = " << (retVal % 4) << "; m_instructionsSize = " << m_instructionsSize <<std::endl;
+
+   return retVal;
 }
 
 void ExecutableProgram::printInstructions() const

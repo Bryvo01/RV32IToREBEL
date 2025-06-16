@@ -49,7 +49,7 @@ private:
    std::uint32_t m_instructionsSizeBytes;
    std::uint32_t m_heapSizeBytes;
 
-   HeapVector m_memory; // Starts at m_instructionsSize;
+   HeapVector m_memory;
    SymbolTableMap m_symbolTable;
 };
 

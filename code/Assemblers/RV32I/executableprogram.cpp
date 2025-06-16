@@ -140,7 +140,7 @@ void ExecutableProgram::calculateMemorySize()
 
    m_memory.resize(memorySize, 0);
 
-   std::cout << "Program size: " << getProgramSizeBytes() << " bytes; Instructions size: " << getInstructionsSizeBytes() << " bytes; Memory size: " << m_memory.size() << " bytes" << std::endl;
+   // std::cout << "Program size: " << getProgramSizeBytes() << " bytes; Instructions size: " << getInstructionsSizeBytes() << " bytes; Memory size: " << m_memory.size() << " bytes" << std::endl;
 }
 
 std::uint32_t ExecutableProgram::getProgramSizeBytes() const
