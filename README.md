@@ -10,6 +10,38 @@ A lightweight translator to translate and simulate binary RISCV RV32I assembly t
 
 The Lexer, Parser, and Token classes under code/Parsers was copied from [GIT](https://github.com/AZHenley/riscv-parser), a [RISC-V parser created by Austin Henley](https://austinhenley.com/blog/parsingriscv.html), and then adapted to our needs.
 
+---
+## Containerized Development Environment
+
+To eliminate the need for manual GCC toolchain installations and environment variable configurations, this project now uses a Dockerized build environment. 
+
+### Prerequisites
+* Docker installed on your host machine.
+
+### Build Instructions
+
+**1. Build the Docker image:**
+Run this command from the root of the repository to install the required RISC-V cross-compilers and C++ build tools:
+```bash
+docker build -t rebel6-dev .
+```
+**2. Start the interactive container:**
+This will spin up the container and mount your local directory to `/app` inside the container. This allows you to edit files on your host machine using your preferred IDE while compiling in the container.
+```bash
+docker run -it --rm -v $(pwd):/app rebel6-dev
+```
+**3. Compile the Translator:**
+Once inside the container's terminal, navigate tot he code directory and build the executable using CMake:
+```bash
+cd code
+cmake .
+make
+```
+The RV32IToREBEL executable will be generated inside the `code/` directory. Because of the volume mount, this binary will also be immediately available on your host machine.
+
+---
+# Bare Metal/Manual Setup (Legacy)
+
 ## GCC Toolchain setup
 
 The setup and installation of the [GCC Toolchain](https://pages.github.com/) has been tested using Windows Subsystem for Linux (WSL) as OS, targeting the Newlib (bare-metal) cross-compiler to avoid interference from an OS when generating RV32I assembly. Although the GIT page for the toolchain contains a walkthrough of how to set up and install the toolchain, we none the less describe the setup that worked for us.

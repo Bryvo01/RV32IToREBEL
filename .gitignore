@@ -38,3 +38,18 @@
 
 # Build directory
 build*/
+
+# ---------------------------------------------------
+# CMake and Make Build Artifacts
+# ---------------------------------------------------
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# ---------------------------------------------------
+# Compiled Executables and Object Files
+# ---------------------------------------------------
+RV32IToREBEL
+*.o
+*.outs

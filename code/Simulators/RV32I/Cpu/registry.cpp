@@ -2,6 +2,7 @@
 
 #include <logger.h>
 
+#include <algorithm>
 #include <iostream>
 #include <vector>
 

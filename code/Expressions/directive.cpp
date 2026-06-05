@@ -1,5 +1,6 @@
 #include "directive.h"
 
+#include <algorithm>
 #include <iostream>
 
 namespace Expressions

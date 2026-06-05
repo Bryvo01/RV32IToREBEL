@@ -1,5 +1,6 @@
 #include "instruction.h"
 
+#include <algorithm>
 #include <iostream>
 
 namespace Expressions
