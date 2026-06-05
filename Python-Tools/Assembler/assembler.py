@@ -23,6 +23,20 @@ def normalize_arg(arg: str) -> str:
   """
   return ABI_TO_REG.get(arg, arg)
 
+def parse_immediate(val: str) -> int | str:
+  """
+  Attempts to convert a string representation of a number (hex or decimal)
+  into a Python integer. Returns the original string if it is not a number.
+
+  :param val: The string to convert.
+  :return: An integer if conversion succeeds, otherwise the original string.
+  """
+  try:
+    return int(val, 0)
+  except ValueError:
+    # If it fails, it must be a register ('x1') or label ('fail')
+    return val
+
 def tokenize_instruction(inst_str: str) -> dict:
   """
   Splits a raw assembly instruction into its opcode and arguments.
@@ -31,14 +45,14 @@ def tokenize_instruction(inst_str: str) -> dict:
   :param inst_str: The raw instruction string from the assembly file.
   :return: A dictionary containing the parsed 'opcode' and 'args' list.
   """
-  # Split on the first chunk of whitespace
+  # Split on the first whitespace
   parts = inst_str.split(None, 1)
   opcode = parts[0]
   args = []
 
   if len(parts) > 1:
-    # Split by comma, strip whitespace, and normalize ABI names
-    args = [normalize_arg(arg.strip()) for arg in parts[1].split(',')]
+    # Split by comma, strip whitespace, normalize ABI names, and parse integers
+    args = [parse_immediate(normalize_arg(arg.strip())) for arg in parts[1].split(',')]
 
   return {'opcode': opcode, 'args': args}
 
@@ -84,7 +98,7 @@ if __name__ == '__main__':
 
   labels, insts = parse_tas_file(test_file)
 
-  print(f'Parsing Complete!')
+  print('Parsing Complete!')
 
   print('--- First 5 tokenized instructions ---')
   for i in range(5):
