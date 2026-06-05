@@ -1,0 +1,56 @@
+# .github/workflows/ci.yml
+
+name: REBEL-6 Compiler CI
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Build Dev Environment (Docker)
+        run: docker build -t rebel6-dev .
+
+      - name: Compile the RV32IToREBEL Translator
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app rebel6-dev bash -c "cd code && cmake . && make"
+
+      - name: Run Core Assembly Benchmarks
+        # Loops through the test folder, runs the translator, and greps for success.
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app rebel6-dev bash -c '
+          cd code
+          echo "Starting Translation and Simulation tests..."
+
+          for test_file in ../RiscvTests/PreprocessedAssembly/*.s; do
+            echo "-----------------------------------"
+            echo "Testing: $test_file"
+
+            # Capture the output of the translator
+            OUTPUT=$(./RV32IToREBEL "$test_file")
+
+            # Check for binary simulation success
+            if ! echo "$OUTPUT" | grep -q "RV32I TEST PASSED"; then
+              echo "FAILED: RV32I Binary Simulation failed on $test_file"
+              exit 1
+            fi
+
+            # Check for ternary simulation success
+            if ! echo "$OUTPUT" | grep -q "REBEL-6 TEST PASSED"; then
+              echo "FAILED: REBEL-6 Ternary Simulation failed on $test_file"
+              exit 1
+            fi
+
+            echo "PASSED"
+          done
+
+          echo "All architecture tests passed successfully!"
+          '
