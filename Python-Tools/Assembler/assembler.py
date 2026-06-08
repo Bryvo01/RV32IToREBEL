@@ -126,24 +126,25 @@ def int_to_ternary(val, width: int = 0) -> str:
     val = int(val)
 
   if val == 0:
-    return "0"
-  trits = []
-  temp_val = val
-  while temp_val != 0:
-    remainder = temp_val % 3
-    if remainder == 0:
-      trits.append('0')
-      temp_val = temp_val // 3
-    elif remainder == 1:
-      trits.append('+')
-      temp_val = temp_val // 3
-    elif remainder == 2:
-      trits.append('-')
-      temp_val = (temp_val // 3) + 1  # The balanced ternary carry step
+    result = "0"
+  else:
+    trits = []
+    temp_val = val
+    while temp_val != 0:
+      remainder = temp_val % 3
+      if remainder == 0:
+        trits.append('0')
+        temp_val = temp_val // 3
+      elif remainder == 1:
+        trits.append('+')
+        temp_val = temp_val // 3
+      elif remainder == 2:
+        trits.append('-')
+        temp_val = (temp_val // 3) + 1  # The balanced ternary carry step
 
-  # The algorithm calculates from least-significant to most-significant trit,
-  # so we must reverse the list to read it correctly left-to-right.
-  result = "".join(reversed(trits))
+    # The algorithm calculates from least-significant to most-significant trit,
+    # so we reverse the list to read it correctly left-to-right.
+    result = ''.join(reversed(trits))
   if width > 0 and len(result) < width:
     # pad with leading zeros
     result = "0" * (width - len(result)) + result
