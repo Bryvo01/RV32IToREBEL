@@ -20,19 +20,19 @@ ABI_TO_REG = {
 # ---------------------------------------------------
 OPCODES = {
   # R-Type: Register-to-Register (e.g., add rd, rs1, rs2)
-  'add':   {'type': 'R', 'trit_code': '+ 0 -'},
+  'add':   {'type': 'R', 'trit_code': '+0-00'},
 
   # I-Type: Register-to-Immediate (e.g., addi rd, rs1, imm)
-  'addi':  {'type': 'I', 'trit_code': '+ 0 0'},
+  'addi':  {'type': 'I', 'trit_code': '+0000'},
 
   # Custom Ternary I-Type (Load Immediate Ternary)
-  'li.t':  {'type': 'I', 'trit_code': '+ + -'},
+  'li.t':  {'type': 'I', 'trit_code': '++-00'},
 
   # B-Type: Branching (e.g., bne.t rs1, rs2, offset)
-  'bne.t': {'type': 'B', 'trit_code': '- 0 +'},
+  'bne.t': {'type': 'B', 'trit_code': '-0+00'},
 
   # Environment Call (Halt / System)
-  'ecall': {'type': 'I', 'trit_code': '0 0 0'}
+  'ecall': {'type': 'I', 'trit_code': '00000'}
 }
 
 def normalize_arg(arg: str) -> str:
@@ -192,7 +192,7 @@ def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
 
     # Handle opcodes we haven't added to the dictionary yet
     op_data = opcodes.get(opcode, {'type': 'UNKNOWN', 'trit_code': '00000'})
-    trit_code = op_data['trit_code'].replace(' ', '')
+    trit_code = op_data['trit_code']
 
     # Convert all arguments to balanced ternary
     ternary_args = []
