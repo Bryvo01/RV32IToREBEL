@@ -1,6 +1,7 @@
 # Python-Tools/Assembler/vm.py
 
 from instructions import INSTRUCTION_SET
+from isa import CONTROL_ROM, INSTRUCTION_FORMATS
 
 class Rebel6VM:
   def __init__(self) -> None:
@@ -8,13 +9,6 @@ class Rebel6VM:
     self.registers = {f"x{i}": "0" for i in range(32)}
     self.memory = {}
     self.running = False
-    # Hardware control ROM: maps 5-trit opcodes to their instruction set format
-    self.control_rom = {
-      '+0-00': 'R', # add
-      '++-00': 'I', # li.t
-      '-0+00': 'B', # bne.t
-      '00000': 'SYS' # ecall
-    }
 
   def load_program(self, machine_code_list: list) -> None:
     """
@@ -58,26 +52,20 @@ class Rebel6VM:
 
   def decode(self, instruction: str) -> dict:
     """
-    Stage 2: Slices the 32-trit machine code into usable components based on
-    its opcode signature from the Control ROM
-    :return: the decoded instruction
+    Stage 2: Slices the 32-trit machine code into usable components
+    using the Data-Driven wiring specs from isa.py.
     """
     opcode_trits = instruction[0:5]
-    inst_type = self.control_rom.get(opcode_trits, 'UNKNOWN')
+
+    inst_type = CONTROL_ROM.get(opcode_trits, 'UNKNOWN')
     decoded = {'opcode': opcode_trits, 'type': inst_type}
 
-    if inst_type == 'R':
-      # R-Type: Opcode(5) | rd(4) | rs1(4) | rs2(4) | padding(15)
-      decoded['rd']  = instruction[5:9]
-      decoded['rs1'] = instruction[9:13]
-      decoded['rs2'] = instruction[13:17]
-    elif inst_type == 'I':
-      decoded['rd']  = instruction[5:9]
-      decoded['imm'] = instruction[9:19]
-    elif inst_type == 'B':
-      decoded['rs1'] = instruction[5:9]
-      decoded['rs2'] = instruction[9:13]
-      decoded['imm'] = instruction[13:23]
+    # Fetch the wiring schematic for this instruction type
+    format_spec = INSTRUCTION_FORMATS.get(inst_type, {})
+
+    # Slice the instruction string based on the spec
+    for field, (start, end) in format_spec.items():
+      decoded[field] = instruction[start:end]
 
     return decoded
 
@@ -129,31 +117,43 @@ class Rebel6VM:
         temp_val = (temp_val // 3) + 1
     return ''.join(reversed(trits))
 
-if __name__ == "__main__":
-  cpu = Rebel6VM()
+if __name__ == '__main__':
+  import sys
+  from assembler import parse_tas_file, resolve_addresses, translate_to_machine_code, OPCODES
 
-  # This is the output from our assembler for: li.t x3, 2
-  mock_rom = [
-    '++-000+-000000000+00000000000000',
-    '00000000000000000000000000000000'
-  ]
-  cpu.load_program(mock_rom)
+  # TODO: Hardcoded for testing, use argparse later
+  # TODO: when you argparse, add a flag for compatibility mode
+  test_file = 'code/add.tas'
+
+  print('--- [PHASE 1] ASSEMBLER ---')
+  try:
+    labels, raw_insts = parse_tas_file(test_file)
+    resolved_insts = resolve_addresses(raw_insts, labels)
+    final_binaries = translate_to_machine_code(resolved_insts, OPCODES)
+    machine_code_list = [inst['machine_code'] for inst in final_binaries]
+    print(f'Successfully assembled {len(machine_code_list)} instructions.')
+  except Exception as e:
+    print(f'Assembler Failed: {e}')
+    sys.exit(1)
+
+  print('\n--- [PHASE 2] VIRTUAL MACHINE ---')
+  cpu = Rebel6VM()
+  cpu.load_program(machine_code_list)
   cpu.running = True
 
-  print('\nStarting CPU Execution Loop...')
+  print('\nStarting CPU Executin Loop...\n')
   while cpu.running:
-    print(f'\n--- PC: {cpu.pc} ...')
-
+    # Debug helper
+    print(f'--- PC: {cpu.pc} ---')
     # STAGE 1: FETCH
     current_inst = cpu.fetch()
-    print(f'Fetched 32-Trit String: {current_inst}')
+    #print(f'Fetched 32-Trit String: {current_inst}')
 
     # STAGE 2: DECODE
     decoded_signals = cpu.decode(current_inst)
-    print(f'Decoded CPU Signals:  {decoded_signals}')
+    #print(f'Decoded CPU Signals:  {decoded_signals}')
 
     # STAGE 3: EXECUTE
     cpu.execute(decoded_signals)
-    print(f'Executing {decoded_signals}')
-
+    #print(f'Executing {decoded_signals}')
   cpu.dump_registers()

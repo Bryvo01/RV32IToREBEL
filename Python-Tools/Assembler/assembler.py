@@ -1,39 +1,8 @@
 # Python-Tools/Assembler/assembler.py
 import sys
 import os
-# from turtle import width
+from isa import ABI_TO_REG, OPCODES
 
-# Standard RISC-V ABI to Hardware Register mapping
-ABI_TO_REG = {
-  'zero': 'x0', 'ra': 'x1', 'sp': 'x2', 'gp': 'x3', 'tp': 'x4',
-  't0': 'x5', 't1': 'x6', 't2': 'x7', 's0': 'x8', 'fp': 'x8', 's1': 'x9',
-  'a0': 'x10', 'a1': 'x11', 'a2': 'x12', 'a3': 'x13', 'a4': 'x14',
-  'a5': 'x15', 'a6': 'x16', 'a7': 'x17', 's2': 'x18', 's3': 'x19',
-  's4': 'x20', 's5': 'x21', 's6': 'x22', 's7': 'x23', 's8': 'x24',
-  's9': 'x25', 's10': 'x26', 's11': 'x27', 't3': 'x28', 't4': 'x29',
-  't5': 'x30', 't6': 'x31'
-}
-
-# ---------------------------------------------------
-# REBEL-6 Ternary Opcode Dictionary
-# Format: 'opcode_name': {'type': 'format_type', 'trit_code': 'ternary_string'}
-# ---------------------------------------------------
-OPCODES = {
-  # R-Type: Register-to-Register (e.g., add rd, rs1, rs2)
-  'add':   {'type': 'R', 'trit_code': '+0-00'},
-
-  # I-Type: Register-to-Immediate (e.g., addi rd, rs1, imm)
-  'addi':  {'type': 'I', 'trit_code': '+0000'},
-
-  # Custom Ternary I-Type (Load Immediate Ternary)
-  'li.t':  {'type': 'I', 'trit_code': '++-00'},
-
-  # B-Type: Branching (e.g., bne.t rs1, rs2, offset)
-  'bne.t': {'type': 'B', 'trit_code': '-0+00'},
-
-  # Environment Call (Halt / System)
-  'ecall': {'type': 'I', 'trit_code': '00000'}
-}
 
 def normalize_arg(arg: str) -> str:
   """
@@ -48,13 +17,17 @@ def normalize_arg(arg: str) -> str:
 def parse_immediate(val: str) -> int | str:
   """
   Attempts to convert a string representation of a number (hex or decimal)
-  into a Python integer. Returns the original string if it is not a number.
-
-  :param val: The string to convert.
-  :return: An integer if conversion succeeds, otherwise the original string.
+  into a Python integer. Enforces 32-bit two's complement for hex strings.
   """
   try:
-    return int(val, 0)
+    num = int(val, 0)
+
+    # Hardware Rule: If a 32-bit hex value has the binary sign-bit set
+    # (>= 0x80000000), it is a negative number.
+    if num >= 0x80000000:
+      num = num - 0x100000000
+
+    return num
   except ValueError:
     # If it fails, it must be a register ('x1') or label ('fail')
     return val
@@ -196,13 +169,18 @@ def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
 
     # Convert all arguments to balanced ternary
     ternary_args = []
+    # Count how many trits the registers use
+    reg_count = sum(1 for arg in args if isinstance(arg, str) and arg.startswith('x'))
+    reg_trits = reg_count * 4
+    # give the rest to immediate
+    imm_width = 32 - 5 - reg_trits
     for arg in args:
       if isinstance(arg, str) and arg.startswith('x'):
         # registers are 4 trits wide
         ternary_args.append(int_to_ternary(arg, width=4))
       else:
-        # Immediates/Offsets can be wider, default to 10 trits for now
-        ternary_args.append(int_to_ternary(arg, width=10))
+        # Immediates/Offsets can be wider, default to 23
+        ternary_args.append(int_to_ternary(arg, width=imm_width))
     raw_instruction = trit_code + ''.join(ternary_args)
 
     if len(raw_instruction) < 32:

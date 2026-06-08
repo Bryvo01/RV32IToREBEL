@@ -20,10 +20,26 @@ def execute_add(cpu, decoded: dict) -> None:
     val2 = cpu.ternary_to_int(cpu.registers[f'x{rs2_num}'])
 
     result = val1 + val2
+    result = (result + 0x80000000) % 0x100000000 - 0x80000000
     ternary_result = cpu.int_to_ternary(result)
 
     cpu.registers[f'x{rd_num}'] = ternary_result
     print(f"[Execute] ADD: x{rs1_num}({val1}) + x{rs2_num}({val2}) = {result} ('{ternary_result}') -> x{rd_num}")
+
+def execute_addi(cpu, decoded: dict) -> None:
+  """Add Immediate (addi)
+  """
+  rd_num = cpu.ternary_to_int(decoded['rd'])
+  rs1_num = cpu.ternary_to_int(decoded['rs1'])
+  imm_val = cpu.ternary_to_int(decoded['imm'])
+
+  if rd_num != 0:
+    val1 = cpu.ternary_to_int(cpu.registers[f'x{rs1_num}'])
+    result = val1 + imm_val
+    result = (result + 0x80000000) % 0x100000000 - 0x80000000
+    ternary_result = cpu.int_to_ternary(result)
+    cpu.registers[f'x{rd_num}'] = ternary_result
+    print(f"[Execute] ADDI: x{rs1_num}({val1}) + {imm_val} = ('{ternary_result}') -> x{rd_num}")
 
 def execute_bne_t(cpu, decoded: dict) -> None:
   """Branch Not Equal (bne.t)"""
@@ -51,8 +67,10 @@ def execute_ecall(cpu, decoded: dict) -> None:
 # The Dispatch Table: Maps Opcode Signatures to Functions
 # ---------------------------------------------------
 INSTRUCTION_SET = {
-  '++-00': execute_lit,
-  '+0-00': execute_add,
-  '-0+00': execute_bne_t,
-  '00000': execute_ecall
+  '++-00': execute_lit,   # load immediate address
+  '+0000': execute_addi,  # add immediate
+  '+000+': execute_addi,   # add immediate
+  '+0-00': execute_add,   # add
+  '-0+00': execute_bne_t, # branch not equal
+  '00000': execute_ecall  # halt system
 }
