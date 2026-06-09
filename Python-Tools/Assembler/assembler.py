@@ -1,10 +1,10 @@
 # Python-Tools/Assembler/assembler.py
-import sys
-import os
+from unicodedata import normalize
+
 from isa import ABI_TO_REG, OPCODES
 
 
-def normalize_arg(arg: str) -> str:
+def normalize_arg(arg: str) -> int | str:
   """
   Converts an ABI register name to its hardware designation (e.g., 'gp' to
   'x3'). Leaves immediate values and 'x' registers unmodified.
@@ -12,7 +12,16 @@ def normalize_arg(arg: str) -> str:
   :param arg: The string argument to check against the ABI dictionary.
   :return: The hardware register string, or the original string if not found.
   """
-  return ABI_TO_REG.get(arg, arg)
+  if arg in ABI_TO_REG:
+    arg = ABI_TO_REG[arg]
+  try:
+    num = int(arg, 0)
+    if num >= 0x80000000:
+      num = num - 0x100000000
+    return num
+  except ValueError:
+    return arg
+  # return ABI_TO_REG.get(arg, arg)
 
 def parse_immediate(val: str) -> int | str:
   """
@@ -60,32 +69,37 @@ def parse_tas_file(filepath: str) -> tuple[dict, list]:
   :return: A tuple containing a dict of labels and a list of tokenized
            instruction dictionaries.
   """
-  if not os.path.exists(filepath):
-    print(f'Error: Could not find {filepath}')
-    sys.exit(1)
-
-  with open(filepath, 'r') as file:
-    lines = file.readlines()
-
-  instructions = []
   labels = {}
+  raw_insts = []
+  pc_counter = 0
+  in_text_section = True # Default to assume we are reading code
 
-  for line in lines:
-    clean_line = line.strip()
+  with open(filepath, 'r') as f:
+    for line in f:
+      clean_line = line.split('#')[0].strip()
+      if not clean_line:
+        continue
+      if clean_line.startswith('.'):
+        directive = clean_line.split()[0]
+        if directive == '.text':
+          in_text_section = True
+        elif directive in ['.data', '.rodata', '.bss']:
+          in_text_section = False
+        continue
+      # Skip instruction parsing if we are in .data
+      if not in_text_section:
+        continue
+      if clean_line.endswith(':'):
+        label_name = clean_line[:-1]
+        labels[label_name] = pc_counter
+        continue
+      parts = clean_line.replace(',', ' ').split()
+      opcode = parts[0]
+      args = [normalize_arg(arg) for arg in parts[1:]]
+      raw_insts.append({'opcode': opcode, 'args': args})
+      pc_counter += 1
 
-    # TODO: Skip empty lines and assembler directives (for now)
-    if not clean_line or clean_line.startswith('.'):
-      continue
-
-    if clean_line.endswith(':'):
-      label_name = clean_line[:-1]  # Remove the colon
-      # Record that this label points to the NEXT instruction to be added
-      labels[label_name] = len(instructions)
-    else:
-      tokenized = tokenize_instruction(clean_line)
-      instructions.append(tokenized)
-
-  return labels, instructions
+  return labels, raw_insts
 
 def resolve_addresses(instructions: list, labels: dict) -> list:
   """
@@ -150,7 +164,7 @@ def int_to_ternary(val, width: int = 0) -> str:
     result = "0" * (width - len(result)) + result
   return result
 
-def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
+def translate_to_machine_code(resolved_insts: list) -> list:
   """
   Pass 3 (Emission): Converts resolved instructions into raw ternary machine code.
 
@@ -165,7 +179,7 @@ def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
     args = inst['args']
 
     # Handle opcodes we haven't added to the dictionary yet
-    op_data = opcodes.get(opcode, {'type': 'UNKNOWN', 'trit_code': '00000'})
+    op_data = OPCODES.get(opcode, {'type': 'UNKNOWN', 'trit_code': '00000'})
     trit_code = op_data['trit_code']
 
     # Convert all arguments to balanced ternary
@@ -187,8 +201,11 @@ def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
     if len(raw_instruction) < 32:
       raw_instruction = raw_instruction.ljust(32,'0')
     elif len(raw_instruction) > 32:
-      # TODO: throw an overflow error
-      raw_instruction = raw_instruction[:32]
+      raise ValueError(
+        f"Hardware Overflow: '{inst['opcode']}' requires {len(raw_instruction)} "
+        f"trits, which exceeds the physical 32-trit bus! "
+        f"Raw string: {raw_instruction}"
+      )
 
     machine_code.append({'original_op': opcode, 'machine_code': raw_instruction})
 
@@ -205,7 +222,7 @@ if __name__ == '__main__':
   resolved_insts = resolve_addresses(raw_insts, labels)
 
   # Pass 3: Machine Code Emission
-  final_binaries = translate_to_machine_code(resolved_insts, OPCODES)
+  final_binaries = translate_to_machine_code(resolved_insts)
 
   print('Assembler Pipeline Complete!\n')
 

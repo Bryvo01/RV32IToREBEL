@@ -4,11 +4,13 @@ from instructions import INSTRUCTION_SET
 from isa import CONTROL_ROM, INSTRUCTION_FORMATS
 
 class Rebel6VM:
-  def __init__(self) -> None:
+  def __init__(self, compat_mode: bool = False, verbosity: int = 0) -> None:
     self.pc = 0
     self.registers = {f"x{i}": "0" for i in range(32)}
     self.memory = {}
     self.running = False
+    self.compat_mode = compat_mode
+    self.verbosity = verbosity
 
   def load_program(self, machine_code_list: list) -> None:
     """
@@ -119,17 +121,22 @@ class Rebel6VM:
 
 if __name__ == '__main__':
   import sys
-  from assembler import parse_tas_file, resolve_addresses, translate_to_machine_code, OPCODES
+  import argparse
+  from assembler import parse_tas_file, resolve_addresses, translate_to_machine_code
 
-  # TODO: Hardcoded for testing, use argparse later
-  # TODO: when you argparse, add a flag for compatibility mode
-  test_file = 'code/add.tas'
+  parser = argparse.ArgumentParser(description='REBEL-6 Ternary Virtual Machine')
+  parser.add_argument('file', help='The .tas assembly file to execute', default='code/add.tas')
+  parser.add_argument('-c', '--compat', action='store_true',
+                      help='Enable 32-bit Legacy Compatibility Mode (forces integer oveflow)')
+  parser.add_argument('-v', '--verbose', action='count', default=0,
+    help='Increase verbosity (-v for basic PC trace, -vv for full execution trace)')
+  args = parser.parse_args()
 
   print('--- [PHASE 1] ASSEMBLER ---')
   try:
-    labels, raw_insts = parse_tas_file(test_file)
+    labels, raw_insts = parse_tas_file(args.file)
     resolved_insts = resolve_addresses(raw_insts, labels)
-    final_binaries = translate_to_machine_code(resolved_insts, OPCODES)
+    final_binaries = translate_to_machine_code(resolved_insts)
     machine_code_list = [inst['machine_code'] for inst in final_binaries]
     print(f'Successfully assembled {len(machine_code_list)} instructions.')
   except Exception as e:
@@ -137,23 +144,27 @@ if __name__ == '__main__':
     sys.exit(1)
 
   print('\n--- [PHASE 2] VIRTUAL MACHINE ---')
-  cpu = Rebel6VM()
+  cpu = Rebel6VM(compat_mode=args.compat, verbosity=args.verbose)
   cpu.load_program(machine_code_list)
   cpu.running = True
 
-  print('\nStarting CPU Executin Loop...\n')
+  print('\nStarting CPU Execution Loop...\n')
   while cpu.running:
     # Debug helper
-    print(f'--- PC: {cpu.pc} ---')
+    if cpu.verbosity >= 2:
+      print(f'--- PC: {cpu.pc} ---')
     # STAGE 1: FETCH
     current_inst = cpu.fetch()
-    #print(f'Fetched 32-Trit String: {current_inst}')
+    if cpu.verbosity >= 3:
+      print(f'Fetched 32-Trit String: {current_inst}')
 
     # STAGE 2: DECODE
     decoded_signals = cpu.decode(current_inst)
-    #print(f'Decoded CPU Signals:  {decoded_signals}')
+    if cpu.verbosity >= 3:
+      print(f'Decoded CPU Signals:  {decoded_signals}')
 
     # STAGE 3: EXECUTE
     cpu.execute(decoded_signals)
-    #print(f'Executing {decoded_signals}')
+    if cpu.verbosity >= 3:
+      print(f'Executing {decoded_signals}')
   cpu.dump_registers()

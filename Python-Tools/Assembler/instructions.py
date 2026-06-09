@@ -7,7 +7,8 @@ def execute_lit(cpu, decoded: dict) -> None:
     clean_imm = decoded['imm'].lstrip('0')
     if not clean_imm: clean_imm = '0'
     cpu.registers[f'x{rd_num}'] = clean_imm
-    print(f"[Execute] Loaded '{clean_imm}' into x{rd_num}")
+    if cpu.verbosity >=2:
+      print(f"[Execute] Loaded '{clean_imm}' into x{rd_num}")
 
 def execute_add(cpu, decoded: dict) -> None:
   """Add Register to Register (add)"""
@@ -20,11 +21,13 @@ def execute_add(cpu, decoded: dict) -> None:
     val2 = cpu.ternary_to_int(cpu.registers[f'x{rs2_num}'])
 
     result = val1 + val2
-    result = (result + 0x80000000) % 0x100000000 - 0x80000000
+    if cpu.compat_mode:
+      result = (result + 0x80000000) % 0x100000000 - 0x80000000
     ternary_result = cpu.int_to_ternary(result)
 
     cpu.registers[f'x{rd_num}'] = ternary_result
-    print(f"[Execute] ADD: x{rs1_num}({val1}) + x{rs2_num}({val2}) = {result} ('{ternary_result}') -> x{rd_num}")
+    if cpu.verbosity >=2:
+      print(f"[Execute] ADD: x{rs1_num}({val1}) + x{rs2_num}({val2}) = {result} ('{ternary_result}') -> x{rd_num}")
 
 def execute_addi(cpu, decoded: dict) -> None:
   """Add Immediate (addi)
@@ -36,10 +39,12 @@ def execute_addi(cpu, decoded: dict) -> None:
   if rd_num != 0:
     val1 = cpu.ternary_to_int(cpu.registers[f'x{rs1_num}'])
     result = val1 + imm_val
-    result = (result + 0x80000000) % 0x100000000 - 0x80000000
+    if cpu.compat_mode:
+      result = (result + 0x80000000) % 0x100000000 - 0x80000000
     ternary_result = cpu.int_to_ternary(result)
     cpu.registers[f'x{rd_num}'] = ternary_result
-    print(f"[Execute] ADDI: x{rs1_num}({val1}) + {imm_val} = ('{ternary_result}') -> x{rd_num}")
+    if cpu.verbosity >=2:
+      print(f"[Execute] ADDI: x{rs1_num}({val1}) + {imm_val} = ('{ternary_result}') -> x{rd_num}")
 
 def execute_bne_t(cpu, decoded: dict) -> None:
   """Branch Not Equal (bne.t)"""
@@ -53,13 +58,16 @@ def execute_bne_t(cpu, decoded: dict) -> None:
   if val1 != val2:
     original_pc = cpu.pc - 1
     cpu.pc = original_pc + offset
-    print(f"[Execute] BNE.T: {val1} != {val2}. Branching to PC {cpu.pc}")
+    if cpu.verbosity >=2:
+      print(f"[Execute] BNE.T: {val1} != {val2}. Branching to PC {cpu.pc}")
   else:
-    print(f"[Execute] BNE.T: {val1} == {val2}. No branch taken.")
+    if cpu.verbosity >=2:
+      print(f"[Execute] BNE.T: {val1} == {val2}. No branch taken.")
 
 def execute_ecall(cpu, decoded: dict) -> None:
   """System Halt (ecall)"""
-  print('[Execute] ECALL: Halting CPU.')
+  if cpu.verbosity >=2:
+    print('[Execute] ECALL: Halting CPU.')
   cpu.running = False
 
 
