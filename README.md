@@ -10,7 +10,36 @@ A lightweight translator to translate and simulate binary RISCV RV32I assembly t
 
 The Lexer, Parser, and Token classes under code/Parsers was copied from [GIT](https://github.com/AZHenley/riscv-parser), a [RISC-V parser created by Austin Henley](https://austinhenley.com/blog/parsingriscv.html), and then adapted to our needs.
 
+# REBEL-6 Ternary Virtual Machine (Python Prototype)
+
+A software-defined, balanced-ternary Virtual Machine and custom Assembler built to emulate the REBEL-6 architecture.
+
+## Features
+* **Custom Assembler:** Parses legacy RISC-V pseudo-assembly (`.tas`), handles ABI register normalization, dynamically allocates physical ternary bus widths, and emits 32-trit machine code.
+* **Data-Driven Decoder:** Utilizes a strict hardware wiring schematic (`isa.py`) to blindly slice opcodes, enforcing true RISC architecture without software-level conditional loops.
+* **Balanced Ternary ALU:** Performs base-10 math under the hood while routing states back into physical `-`, `0`, and `+` ternary strings.
+* **32-Bit Legacy Compatibility:** Built-in overflow limits to seamlessly emulate standard 32-bit two's-complement binary on an infinitely sized Python integer backend.
+* **Full RV32I Core Support:** Supports mathematical operations, bitwise logic, bit-shifting, RAM memory addressing (Load/Store), and subroutine jumps.
+
+## Architecture
+* `isa.py`: The core schematic. Contains the standard ABI mappings, the Hardware Control ROM, and Instruction Format slicing coordinates.
+* `assembler.py`: The compiler. Converts human-readable text into 32-trit physical wire states.
+* `vm.py`: The CPU core. Manages the Fetch-Decode-Execute cycle, the Program Counter, and the RAM/ROM memory arrays.
+* `instructions.py`: The Arithmetic Logic Unit (ALU) and Memory Controller. Houses the mathematical logic for every opcode.
+
+## Usage
+
+Run the Virtual Machine from the command line by pointing it to a `.tas` file.
+
+```bash
+python3 Python-Tools/Assembler/vm.py code/custom_test.tas --compat -vv
+```
+## Flags  
+- --compat or -c: Enables 32-bit Legacy Compatibility Mode (forces integer overflow/underflow).
+- -v or -vv: Adjusts logging verbosity. -v outputs the Program Counter trace, -vv outputs real-time ALU math and RAM memory operations.
+
 ---
+
 ## Containerized Development Environment
 
 To eliminate the need for manual GCC toolchain installations and environment variable configurations, this project now uses a Dockerized build environment. 
@@ -40,6 +69,7 @@ make
 The RV32IToREBEL executable will be generated inside the `code/` directory. Because of the volume mount, this binary will also be immediately available on your host machine.
 
 ---
+
 # Bare Metal/Manual Setup (Legacy)
 
 ## GCC Toolchain setup
