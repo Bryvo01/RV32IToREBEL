@@ -1,41 +1,10 @@
 # Python-Tools/Assembler/assembler.py
-import sys
-import os
-# from turtle import width
+from unicodedata import normalize
 
-# Standard RISC-V ABI to Hardware Register mapping
-ABI_TO_REG = {
-  'zero': 'x0', 'ra': 'x1', 'sp': 'x2', 'gp': 'x3', 'tp': 'x4',
-  't0': 'x5', 't1': 'x6', 't2': 'x7', 's0': 'x8', 'fp': 'x8', 's1': 'x9',
-  'a0': 'x10', 'a1': 'x11', 'a2': 'x12', 'a3': 'x13', 'a4': 'x14',
-  'a5': 'x15', 'a6': 'x16', 'a7': 'x17', 's2': 'x18', 's3': 'x19',
-  's4': 'x20', 's5': 'x21', 's6': 'x22', 's7': 'x23', 's8': 'x24',
-  's9': 'x25', 's10': 'x26', 's11': 'x27', 't3': 'x28', 't4': 'x29',
-  't5': 'x30', 't6': 'x31'
-}
+from isa import ABI_TO_REG, OPCODES
 
-# ---------------------------------------------------
-# REBEL-6 Ternary Opcode Dictionary
-# Format: 'opcode_name': {'type': 'format_type', 'trit_code': 'ternary_string'}
-# ---------------------------------------------------
-OPCODES = {
-  # R-Type: Register-to-Register (e.g., add rd, rs1, rs2)
-  'add':   {'type': 'R', 'trit_code': '+ 0 -'},
 
-  # I-Type: Register-to-Immediate (e.g., addi rd, rs1, imm)
-  'addi':  {'type': 'I', 'trit_code': '+ 0 0'},
-
-  # Custom Ternary I-Type (Load Immediate Ternary)
-  'li.t':  {'type': 'I', 'trit_code': '+ + -'},
-
-  # B-Type: Branching (e.g., bne.t rs1, rs2, offset)
-  'bne.t': {'type': 'B', 'trit_code': '- 0 +'},
-
-  # Environment Call (Halt / System)
-  'ecall': {'type': 'I', 'trit_code': '0 0 0'}
-}
-
-def normalize_arg(arg: str) -> str:
+def normalize_arg(arg: str) -> int | str:
   """
   Converts an ABI register name to its hardware designation (e.g., 'gp' to
   'x3'). Leaves immediate values and 'x' registers unmodified.
@@ -43,21 +12,16 @@ def normalize_arg(arg: str) -> str:
   :param arg: The string argument to check against the ABI dictionary.
   :return: The hardware register string, or the original string if not found.
   """
-  return ABI_TO_REG.get(arg, arg)
-
-def parse_immediate(val: str) -> int | str:
-  """
-  Attempts to convert a string representation of a number (hex or decimal)
-  into a Python integer. Returns the original string if it is not a number.
-
-  :param val: The string to convert.
-  :return: An integer if conversion succeeds, otherwise the original string.
-  """
+  if arg in ABI_TO_REG:
+    arg = ABI_TO_REG[arg]
   try:
-    return int(val, 0)
+    num = int(arg, 0)
+    if num >= 0x80000000:
+      num = num - 0x100000000
+    return num
   except ValueError:
-    # If it fails, it must be a register ('x1') or label ('fail')
-    return val
+    return arg
+  # return ABI_TO_REG.get(arg, arg)
 
 def tokenize_instruction(inst_str: str) -> dict:
   """
@@ -74,7 +38,7 @@ def tokenize_instruction(inst_str: str) -> dict:
 
   if len(parts) > 1:
     # Split by comma, strip whitespace, normalize ABI names, and parse integers
-    args = [parse_immediate(normalize_arg(arg.strip())) for arg in parts[1].split(',')]
+    args = [normalize_arg(arg.strip()) for arg in parts[1].split(',')]
 
   return {'opcode': opcode, 'args': args}
 
@@ -87,32 +51,37 @@ def parse_tas_file(filepath: str) -> tuple[dict, list]:
   :return: A tuple containing a dict of labels and a list of tokenized
            instruction dictionaries.
   """
-  if not os.path.exists(filepath):
-    print(f'Error: Could not find {filepath}')
-    sys.exit(1)
-
-  with open(filepath, 'r') as file:
-    lines = file.readlines()
-
-  instructions = []
   labels = {}
+  raw_insts = []
+  pc_counter = 0
+  in_text_section = True # Default to assume we are reading code
 
-  for line in lines:
-    clean_line = line.strip()
+  with open(filepath, 'r') as f:
+    for line in f:
+      clean_line = line.split('#')[0].strip()
+      if not clean_line:
+        continue
+      if clean_line.startswith('.'):
+        directive = clean_line.split()[0]
+        if directive == '.text':
+          in_text_section = True
+        elif directive in ['.data', '.rodata', '.bss']:
+          in_text_section = False
+        continue
+      # Skip instruction parsing if we are in .data
+      if not in_text_section:
+        continue
+      if clean_line.endswith(':'):
+        label_name = clean_line[:-1]
+        labels[label_name] = pc_counter
+        continue
+      parts = clean_line.replace(',', ' ').split()
+      opcode = parts[0]
+      args = [normalize_arg(arg) for arg in parts[1:]]
+      raw_insts.append({'opcode': opcode, 'args': args})
+      pc_counter += 1
 
-    # TODO: Skip empty lines and assembler directives (for now)
-    if not clean_line or clean_line.startswith('.'):
-      continue
-
-    if clean_line.endswith(':'):
-      label_name = clean_line[:-1]  # Remove the colon
-      # Record that this label points to the NEXT instruction to be added
-      labels[label_name] = len(instructions)
-    else:
-      tokenized = tokenize_instruction(clean_line)
-      instructions.append(tokenized)
-
-  return labels, instructions
+  return labels, raw_insts
 
 def resolve_addresses(instructions: list, labels: dict) -> list:
   """
@@ -153,30 +122,31 @@ def int_to_ternary(val, width: int = 0) -> str:
     val = int(val)
 
   if val == 0:
-    return "0"
-  trits = []
-  temp_val = val
-  while temp_val != 0:
-    remainder = temp_val % 3
-    if remainder == 0:
-      trits.append('0')
-      temp_val = temp_val // 3
-    elif remainder == 1:
-      trits.append('+')
-      temp_val = temp_val // 3
-    elif remainder == 2:
-      trits.append('-')
-      temp_val = (temp_val // 3) + 1  # The balanced ternary carry step
+    result = "0"
+  else:
+    trits = []
+    temp_val = val
+    while temp_val != 0:
+      remainder = temp_val % 3
+      if remainder == 0:
+        trits.append('0')
+        temp_val = temp_val // 3
+      elif remainder == 1:
+        trits.append('+')
+        temp_val = temp_val // 3
+      elif remainder == 2:
+        trits.append('-')
+        temp_val = (temp_val // 3) + 1  # The balanced ternary carry step
 
-  # The algorithm calculates from least-significant to most-significant trit,
-  # so we must reverse the list to read it correctly left-to-right.
-  result = "".join(reversed(trits))
+    # The algorithm calculates from least-significant to most-significant trit,
+    # so we reverse the list to read it correctly left-to-right.
+    result = ''.join(reversed(trits))
   if width > 0 and len(result) < width:
     # pad with leading zeros
     result = "0" * (width - len(result)) + result
   return result
 
-def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
+def translate_to_machine_code(resolved_insts: list) -> list:
   """
   Pass 3 (Emission): Converts resolved instructions into raw ternary machine code.
 
@@ -191,25 +161,33 @@ def translate_to_machine_code(resolved_insts: list, opcodes: dict) -> list:
     args = inst['args']
 
     # Handle opcodes we haven't added to the dictionary yet
-    op_data = opcodes.get(opcode, {'type': 'UNKNOWN', 'trit_code': '00000'})
-    trit_code = op_data['trit_code'].replace(' ', '')
+    op_data = OPCODES.get(opcode, {'type': 'UNKNOWN', 'trit_code': '00000'})
+    trit_code = op_data['trit_code']
 
     # Convert all arguments to balanced ternary
     ternary_args = []
+    # Count how many trits the registers use
+    reg_count = sum(1 for arg in args if isinstance(arg, str) and arg.startswith('x'))
+    reg_trits = reg_count * 4
+    # give the rest to immediate
+    imm_width = 32 - 5 - reg_trits
     for arg in args:
       if isinstance(arg, str) and arg.startswith('x'):
         # registers are 4 trits wide
         ternary_args.append(int_to_ternary(arg, width=4))
       else:
-        # Immediates/Offsets can be wider, default to 10 trits for now
-        ternary_args.append(int_to_ternary(arg, width=10))
+        # Immediates/Offsets can be wider, default to 23
+        ternary_args.append(int_to_ternary(arg, width=imm_width))
     raw_instruction = trit_code + ''.join(ternary_args)
 
     if len(raw_instruction) < 32:
       raw_instruction = raw_instruction.ljust(32,'0')
     elif len(raw_instruction) > 32:
-      # TODO: throw an overflow error
-      raw_instruction = raw_instruction[:32]
+      raise ValueError(
+        f"Hardware Overflow: '{inst['opcode']}' requires {len(raw_instruction)} "
+        f"trits, which exceeds the physical 32-trit bus! "
+        f"Raw string: {raw_instruction}"
+      )
 
     machine_code.append({'original_op': opcode, 'machine_code': raw_instruction})
 
@@ -226,7 +204,7 @@ if __name__ == '__main__':
   resolved_insts = resolve_addresses(raw_insts, labels)
 
   # Pass 3: Machine Code Emission
-  final_binaries = translate_to_machine_code(resolved_insts, OPCODES)
+  final_binaries = translate_to_machine_code(resolved_insts)
 
   print('Assembler Pipeline Complete!\n')
 
