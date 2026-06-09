@@ -17,11 +17,33 @@ ABI_TO_REG = {
 # REBEL-6 Ternary Opcode Dictionary (Used by Assembler)
 # ---------------------------------------------------
 OPCODES = {
+  'bne.t':  {'type': 'B', 'trit_code': '-0+00'},
+  'sw':     {'type': 'S', 'trit_code': '++00+'},
+  'slt':    {'type': 'R', 'trit_code': '+--00'},
+  'and':    {'type': 'R', 'trit_code': '+0-0+'},
+  'or':     {'type': 'R', 'trit_code': '+0-+0'},
+  'xor':    {'type': 'R', 'trit_code': '+0-++'},
   'add':    {'type': 'R', 'trit_code': '+0-00'},
+  'sll':    {'type': 'R', 'trit_code': '+0+00'},
+  'srl':    {'type': 'R', 'trit_code': '+0+0+'},
+  'sra':    {'type': 'R', 'trit_code': '+0++0'},
+  'sub':    {'type': 'R', 'trit_code': '+0--0'},
+  'jal':    {'type': 'J', 'trit_code': '-0000'},
+  'jal.t':  {'type': 'J', 'trit_code': '-000+'},
+  'slti':   {'type': 'I', 'trit_code': '+--0+'},
+  'slti.t': {'type': 'I', 'trit_code': '+--+0'},
+  'slli':   {'type': 'I', 'trit_code': '+0+-0'},
+  'srli':   {'type': 'I', 'trit_code': '+0+-+'},
+  'srai':   {'type': 'I', 'trit_code': '+0+--'},
+  'andi':   {'type': 'I', 'trit_code': '+00-+'},
+  'ori':    {'type': 'I', 'trit_code': '+00+0'},
+  'xori':   {'type': 'I', 'trit_code': '+00++'},
   'addi':   {'type': 'I', 'trit_code': '+0000'},
   'addi.t': {'type': 'I', 'trit_code': '+000+'},
   'li.t':   {'type': 'I', 'trit_code': '++-00'},
-  'bne.t':  {'type': 'B', 'trit_code': '-0+00'},
+  'lw':     {'type': 'I', 'trit_code': '++000'},
+  'jalr':   {'type': 'I', 'trit_code': '-00+0'},
+  'jalr.t': {'type': 'I', 'trit_code': '-00++'},
   'ecall':  {'type': 'I', 'trit_code': '00000'}
 }
 
@@ -30,11 +52,33 @@ OPCODES = {
 # Maps 5-trit opcodes to instruction set formats
 # ---------------------------------------------------
 CONTROL_ROM = {
+  '-0000': 'J',   # X-Type: jal
+  '-000+': 'J',   # X-Type: jal.t
+  '+0-0+': 'R',   # R-Type: and
+  '+0-+0': 'R',   # R-Type: or
+  '+0-++': 'R',   # R-Type: xor
   '+0-00': 'R',   # R-Type: Register-to-Register (e.g., add rd,rs1,rs2)
+  '+0+00': 'R',   # R-Type: sll
+  '+0+0+': 'R',   # R-Type: srl
+  '+0++0': 'R',   # R-Type: sra
+  '+0--0': 'R',   # R-Type: sub
+  '+--00': 'R',   # R-Type: slt
+  '++000': 'I',   # I-Type: lw
+  '+0+-0': 'I',   # I-Type: slli
+  '+0+-+': 'I',   # I-Type: srli
+  '+0+--': 'I',   # I-Type: srai
+  '+00-+': 'I',   # I-Type: andi
+  '+00+0': 'I',   # I-Type: ori
+  '+00++': 'I',   # I-Type: xori
+  '+--0+': 'I',   # X-Type: slti
+  '+--+0': 'I',   # X-Type: slti.t
+  '-00+0': 'I',   # X-Type: jalr
+  '-00++': 'I',   # X-Type: jalr.t
   '+0000': 'I',   # I-Type: Register-to-Immediate (e.g., addi rd,rs1,imm)
   '+000+': 'I',   # I-Type: Add Immediate Ternary (e.g., addi.t x0,x9,0)
   '++-00': 'LI',  # I-Type: Load Immediate Ternary (e.g., li.t x2,11)
   '-0+00': 'B',   # B-Type: Branching (e.g., bne.t rs1, rs2, offset)
+  '++00+': 'S',   # S-Type: sw
   '00000': 'SYS'  # Environment Call (Halt / System) (e.g. ecall)
 }
 
@@ -47,5 +91,7 @@ INSTRUCTION_FORMATS = {
   'LI':  {'rd': (5, 9), 'imm': (9, 32)},
   'I':   {'rd': (5, 9), 'rs1': (9, 13), 'imm': (13, 32)},
   'B':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},
+  'S':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},
+  'J':   {'rd': (5, 9), 'imm': (9, 32)},
   'SYS': {} # ecall requires no additional slicing
 }

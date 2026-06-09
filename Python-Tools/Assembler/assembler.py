@@ -23,24 +23,6 @@ def normalize_arg(arg: str) -> int | str:
     return arg
   # return ABI_TO_REG.get(arg, arg)
 
-def parse_immediate(val: str) -> int | str:
-  """
-  Attempts to convert a string representation of a number (hex or decimal)
-  into a Python integer. Enforces 32-bit two's complement for hex strings.
-  """
-  try:
-    num = int(val, 0)
-
-    # Hardware Rule: If a 32-bit hex value has the binary sign-bit set
-    # (>= 0x80000000), it is a negative number.
-    if num >= 0x80000000:
-      num = num - 0x100000000
-
-    return num
-  except ValueError:
-    # If it fails, it must be a register ('x1') or label ('fail')
-    return val
-
 def tokenize_instruction(inst_str: str) -> dict:
   """
   Splits a raw assembly instruction into its opcode and arguments.
@@ -56,7 +38,7 @@ def tokenize_instruction(inst_str: str) -> dict:
 
   if len(parts) > 1:
     # Split by comma, strip whitespace, normalize ABI names, and parse integers
-    args = [parse_immediate(normalize_arg(arg.strip())) for arg in parts[1].split(',')]
+    args = [normalize_arg(arg.strip()) for arg in parts[1].split(',')]
 
   return {'opcode': opcode, 'args': args}
 

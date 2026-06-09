@@ -8,6 +8,7 @@ class Rebel6VM:
     self.pc = 0
     self.registers = {f"x{i}": "0" for i in range(32)}
     self.memory = {}
+    self.ram = {}
     self.running = False
     self.compat_mode = compat_mode
     self.verbosity = verbosity
