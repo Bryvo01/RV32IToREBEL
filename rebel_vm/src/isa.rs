@@ -15,6 +15,7 @@ pub enum Format {
 }
 
 /// A data struct holding the sliced components of an instruction
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct DecodedInstruction {
   pub format: Format,
