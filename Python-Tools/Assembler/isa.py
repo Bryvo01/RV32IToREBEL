@@ -52,33 +52,33 @@ OPCODES = {
 # Maps 5-trit opcodes to instruction set formats
 # ---------------------------------------------------
 CONTROL_ROM = {
-  '-0000': 'J',   # X-Type: jal
-  '-000+': 'J',   # X-Type: jal.t
-  '+0-0+': 'R',   # R-Type: and
-  '+0-+0': 'R',   # R-Type: or
-  '+0-++': 'R',   # R-Type: xor
-  '+0-00': 'R',   # R-Type: Register-to-Register (e.g., add rd,rs1,rs2)
-  '+0+00': 'R',   # R-Type: sll
-  '+0+0+': 'R',   # R-Type: srl
-  '+0++0': 'R',   # R-Type: sra
-  '+0--0': 'R',   # R-Type: sub
-  '+--00': 'R',   # R-Type: slt
-  '++000': 'I',   # I-Type: lw
-  '+0+-0': 'I',   # I-Type: slli
-  '+0+-+': 'I',   # I-Type: srli
-  '+0+--': 'I',   # I-Type: srai
-  '+00-+': 'I',   # I-Type: andi
-  '+00+0': 'I',   # I-Type: ori
-  '+00++': 'I',   # I-Type: xori
-  '+--0+': 'I',   # X-Type: slti
-  '+--+0': 'I',   # X-Type: slti.t
-  '-00+0': 'I',   # X-Type: jalr
-  '-00++': 'I',   # X-Type: jalr.t
-  '+0000': 'I',   # I-Type: Register-to-Immediate (e.g., addi rd,rs1,imm)
-  '+000+': 'I',   # I-Type: Add Immediate Ternary (e.g., addi.t x0,x9,0)
-  '++-00': 'LI',  # I-Type: Load Immediate Ternary (e.g., li.t x2,11)
-  '-0+00': 'B',   # B-Type: Branching (e.g., bne.t rs1, rs2, offset)
-  '++00+': 'S',   # S-Type: sw
+  '-0000': 'J',   # jal
+  '-000+': 'J',   # jal.t
+  '+0-0+': 'R',   # and
+  '+0-+0': 'R',   # or
+  '+0-++': 'R',   # xor
+  '+0-00': 'R',   # Register-to-Register (e.g., add rd,rs1,rs2)
+  '+0+00': 'R',   # sll
+  '+0+0+': 'R',   # srl
+  '+0++0': 'R',   # sra
+  '+0--0': 'R',   # sub
+  '+--00': 'R',   # slt
+  '++000': 'I',   # lw
+  '+0+-0': 'I',   # slli
+  '+0+-+': 'I',   # srli
+  '+0+--': 'I',   # srai
+  '+00-+': 'I',   # andi
+  '+00+0': 'I',   # ori
+  '+00++': 'I',   # xori
+  '+--0+': 'I',   # slti
+  '+--+0': 'I',   # slti.t
+  '-00+0': 'I',   # jalr
+  '-00++': 'I',   # jalr.t
+  '+0000': 'I',   # Register-to-Immediate (e.g., addi rd,rs1,imm)
+  '+000+': 'I',   # Add Immediate Ternary (e.g., addi.t x0,x9,0)
+  '++-00': 'LI',  # Load Immediate Ternary (e.g., li.t x2,11)
+  '-0+00': 'B',   # Branching (e.g., bne.t rs1, rs2, offset)
+  '++00+': 'S',   # sw
   '00000': 'SYS'  # Environment Call (Halt / System) (e.g. ecall)
 }
 
@@ -87,11 +87,11 @@ CONTROL_ROM = {
 # Maps instruction types to their slice indices: (start, end)
 # ---------------------------------------------------
 INSTRUCTION_FORMATS = {
-  'R':   {'rd': (5, 9), 'rs1': (9, 13), 'rs2': (13, 17)},
-  'LI':  {'rd': (5, 9), 'imm': (9, 32)},
-  'I':   {'rd': (5, 9), 'rs1': (9, 13), 'imm': (13, 32)},
-  'B':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},
-  'S':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},
-  'J':   {'rd': (5, 9), 'imm': (9, 32)},
+  'R':   {'rd': (5, 9), 'rs1': (9, 13), 'rs2': (13, 17)},   # Register to Register
+  'LI':  {'rd': (5, 9), 'imm': (9, 32)},                    # Load Immediate
+  'I':   {'rd': (5, 9), 'rs1': (9, 13), 'imm': (13, 32)},   # Immediate
+  'B':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},  # Branch
+  'S':   {'rs1': (5, 9), 'rs2': (9, 13), 'imm': (13, 32)},  # Store
+  'J':   {'rd': (5, 9), 'imm': (9, 32)},                    # System
   'SYS': {} # ecall requires no additional slicing
 }
