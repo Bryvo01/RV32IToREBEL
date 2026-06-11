@@ -49,22 +49,20 @@ pub fn normalize_arg(arg: &str) -> String {
 }
 
 /// Pass 1 (Parsing): Reads file, strips comments, handles directives, extracts labels.
-pub fn parse_tas_file(filepath: &str) -> Result<(HashMap<String, usize>, Vec<ParsedInst>), String> {
-  // Read the file contents safely
+pub fn parse_tas_file(filepath: &str) -> Result<(HashMap<String, usize>, Vec<ParsedInst>, HashMap<i32, String>), String> {
   let content = fs::read_to_string(filepath)
     .map_err(|e| format!("Assembler Failed: Could not read file '{}'. Error: {}", filepath, e))?;
 
   let mut labels = HashMap::new();
   let mut raw_insts = Vec::new();
+  let mut initial_ram = HashMap::new(); // Store static variables here
   let mut pc_counter = 0;
+  let mut ram_pointer = 8192;           // Start RAM at 0x2000 to avoid low-integer collisions
   let mut in_text_section = true;
 
   for line in content.lines() {
-    // Strip out comments and trim whitespace
     let clean_line = line.split('#').next().unwrap_or("").trim();
-    if clean_line.is_empty() {
-      continue;
-    }
+    if clean_line.is_empty() { continue; }
 
     // --- DIRECTIVE HANDLING ---
     if clean_line.starts_with('.') {
@@ -73,26 +71,37 @@ pub fn parse_tas_file(filepath: &str) -> Result<(HashMap<String, usize>, Vec<Par
         in_text_section = true;
       } else if directive == ".data" || directive == ".rodata" || directive == ".bss" {
         in_text_section = false;
-      }
-      continue;
-    }
+      } else if !in_text_section && directive == ".word" {
+        // Parse .word directives into our RAM hashmap
+        let parts: Vec<&str> = clean_line.split_whitespace().collect();
+        if parts.len() > 1 {
+          let val_str = normalize_arg(parts[1]);
+          let val_int = val_str.parse::<i64>().unwrap_or(0);
+          let mut ternary_val = int_to_ternary(val_int, 32).trim_start_matches('0').to_string();
+          if ternary_val.is_empty() { ternary_val = "0".to_string(); }
 
-    if !in_text_section {
+          initial_ram.insert(ram_pointer, ternary_val);
+          ram_pointer += 4; // Standard RISC-V byte-aligned addressing!
+        }
+      }
       continue;
     }
 
     // --- LABEL HANDLING ---
     if clean_line.ends_with(':') {
       let label_name = clean_line.trim_end_matches(':').to_string();
-      labels.insert(label_name, pc_counter);
+      if in_text_section {
+        labels.insert(label_name, pc_counter); // Text labels map to PC
+      } else {
+        labels.insert(label_name, ram_pointer as usize); // Data labels map to RAM address
+      }
       continue;
     }
 
-    // --- INSTRUCTION TOKENIZATION ---
-    // 1. Save the replaced string to a variable so it stays in memory
-    let clean_commas = clean_line.replace(',', " ");
+    if !in_text_section { continue; }
 
-    // 2. Now we can safely create pointers to it
+    // --- INSTRUCTION TOKENIZATION ---
+    let clean_commas = clean_line.replace(',', " ");
     let parts: Vec<&str> = clean_commas.split_whitespace().collect();
     if parts.is_empty() { continue; }
 
@@ -103,7 +112,7 @@ pub fn parse_tas_file(filepath: &str) -> Result<(HashMap<String, usize>, Vec<Par
     pc_counter += 1;
   }
 
-  Ok((labels, raw_insts))
+  Ok((labels, raw_insts, initial_ram))
 }
 
 /// Matches an assembly mnemonic to its 5-trit REBEL-6 hardware opcode
@@ -167,8 +176,7 @@ pub fn int_to_ternary(mut val: i64, width: usize) -> String {
   if result.len() > width {
     result = result[result.len() - width..].to_string(); // Truncate top trits (overflow)
   } else {
-    let pad_char = if result.starts_with('-') { '-' } else { '0' };
-    let padding = pad_char.to_string().repeat(width - result.len());
+    let padding = "0".repeat(width - result.len());
     result = format!("{}{}", padding, result);
   }
 
@@ -176,17 +184,25 @@ pub fn int_to_ternary(mut val: i64, width: usize) -> String {
 }
 
 /// The Master Assembler function. Runs all three passes.
-pub fn assemble(filepath: &str) -> Result<Vec<String>, String> {
-  // PASS 1: Parse the file
-  let (labels, mut parsed_insts) = parse_tas_file(filepath)?;
+pub fn assemble(filepath: &str) -> Result<(Vec<String>, HashMap<i32, String>), String> {
+  let (labels, mut parsed_insts, initial_ram) = parse_tas_file(filepath)?;
 
   // PASS 2: Label Substitution
   for (i, inst) in parsed_insts.iter_mut().enumerate() {
+    // We must check the instruction format to know how to calculate the label address!
+    let opcode_trits = get_opcode_trits(&inst.opcode).unwrap_or("");
+    let format = crate::isa::decode_format(opcode_trits);
+
     for arg in inst.args.iter_mut() {
-      if let Some(&target_pc) = labels.get(arg) {
-        // If it's a jump target, calculate the relative offset
-        let offset = (target_pc as i64) - (i as i64);
-        *arg = offset.to_string();
+      if let Some(&target_addr) = labels.get(arg) {
+        if format == crate::isa::Format::J || format == crate::isa::Format::B {
+          // Relative PC offset for Jumps and Branches
+          let offset = (target_addr as i64) - (i as i64);
+          *arg = offset.to_string();
+        } else {
+          // Absolute RAM Address for Data Loads
+          *arg = target_addr.to_string();
+        }
       }
     }
   }
@@ -201,28 +217,24 @@ pub fn assemble(filepath: &str) -> Result<Vec<String>, String> {
 
     match format {
       crate::isa::Format::R => {
-        emit.push_str(&int_to_ternary(inst.args[0][1..].parse().unwrap_or(0), 4)); // rd
-        emit.push_str(&int_to_ternary(inst.args[1][1..].parse().unwrap_or(0), 4)); // rs1
-        emit.push_str(&int_to_ternary(inst.args[2][1..].parse().unwrap_or(0), 4)); // rs2
+        emit.push_str(&int_to_ternary(inst.args.get(0).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rd
+        emit.push_str(&int_to_ternary(inst.args.get(1).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rs1
+        emit.push_str(&int_to_ternary(inst.args.get(2).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rs2
         emit.push_str(&"0".repeat(15)); // padding
       }
       crate::isa::Format::I => {
-        emit.push_str(&int_to_ternary(inst.args[0][1..].parse().unwrap_or(0), 4)); // rd
-        emit.push_str(&int_to_ternary(inst.args[1][1..].parse().unwrap_or(0), 4)); // rs1
-        emit.push_str(&int_to_ternary(inst.args[2].parse().unwrap_or(0), 19));    // imm
+        emit.push_str(&int_to_ternary(inst.args.get(0).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rd
+        emit.push_str(&int_to_ternary(inst.args.get(1).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rs1
+        emit.push_str(&int_to_ternary(inst.args.get(2).unwrap_or(&"0".to_string()).parse().unwrap_or(0), 19));    // imm
       }
       crate::isa::Format::S | crate::isa::Format::B => {
-        emit.push_str(&int_to_ternary(inst.args[0][1..].parse().unwrap_or(0), 4)); // rs1
-        emit.push_str(&int_to_ternary(inst.args[1][1..].parse().unwrap_or(0), 4)); // rs2
-        emit.push_str(&int_to_ternary(inst.args[2].parse().unwrap_or(0), 19));    // imm
+        emit.push_str(&int_to_ternary(inst.args.get(0).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rs1
+        emit.push_str(&int_to_ternary(inst.args.get(1).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rs2
+        emit.push_str(&int_to_ternary(inst.args.get(2).unwrap_or(&"0".to_string()).parse().unwrap_or(0), 19));    // imm
       }
-      crate::isa::Format::J => {
-        emit.push_str(&int_to_ternary(inst.args[0][1..].parse().unwrap_or(0), 4)); // rd
-        emit.push_str(&int_to_ternary(inst.args[1].parse().unwrap_or(0), 23));    // imm
-      }
-      crate::isa::Format::LI => {
-        emit.push_str(&int_to_ternary(inst.args[0][1..].parse().unwrap_or(0), 4)); // rd
-        emit.push_str(&int_to_ternary(inst.args[1].parse().unwrap_or(0), 23));    // imm
+      crate::isa::Format::J | crate::isa::Format::LI => {
+        emit.push_str(&int_to_ternary(inst.args.get(0).unwrap_or(&"x0".to_string())[1..].parse().unwrap_or(0), 4)); // rd
+        emit.push_str(&int_to_ternary(inst.args.get(1).unwrap_or(&"0".to_string()).parse().unwrap_or(0), 23));    // imm
       }
       crate::isa::Format::SYS => {
         emit.push_str(&"0".repeat(27)); // padding
@@ -235,5 +247,5 @@ pub fn assemble(filepath: &str) -> Result<Vec<String>, String> {
     machine_code.push(emit);
   }
 
-    Ok(machine_code)
+  Ok((machine_code, initial_ram))
 }

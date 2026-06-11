@@ -31,11 +31,13 @@ impl Rebel6VM {
     }
   }
 
-  /// Load a compiled program into ROM
-  pub fn load_program(&mut self, machine_code: Vec<String>) {
+  /// Load a compiled program into ROM and initialize RAM
+  pub fn load_program(&mut self, machine_code: Vec<String>, initial_ram: HashMap<i32, String>) {
     self.memory = machine_code;
+    self.ram = initial_ram;
     if self.verbosity >= 1 {
       println!("[*] Loaded {} instructions into ROM.", self.memory.len());
+      println!("[*] Initialized {} static variables into RAM.", self.ram.len());
     }
   }
 

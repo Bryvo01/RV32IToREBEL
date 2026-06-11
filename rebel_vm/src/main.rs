@@ -41,15 +41,15 @@ fn main() {
   }
 
   // --- RUN THE ASSEMBLER ---
-  let program = match assembler::assemble(&args.file) {
-    Ok(code) => code,
+  let (program, initial_ram) = match crate::assembler::assemble(&args.file) {
+    Ok(data) => data,
     Err(e) => {
       eprintln!("Fatal Error: {}", e);
       std::process::exit(1);
     }
   };
 
-  cpu.load_program(program);
+  cpu.load_program(program, initial_ram);
   cpu.running = true;
 
   println!("\nStarting CPU Execution Loop...\n");
