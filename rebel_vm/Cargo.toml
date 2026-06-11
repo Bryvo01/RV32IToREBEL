@@ -1,0 +1,11 @@
+[package]
+name = "rebel_vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# CLI Argument Parsing
+clap = { version = "4.4", features = ["derive"] }
+
+# TIS Core Library via Git
+ternary-core = { git = "https://github.com/rfi-irfos/rusty-penguin" }
